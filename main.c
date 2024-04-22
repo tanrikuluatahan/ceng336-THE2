@@ -83,26 +83,10 @@ typedef struct {
 GameObjects gameObjects;
 int movementKeysCount = 4;
 
-enum MovementKeys {
-    RIGHT = 0,
-    LEFT = 1,
-    UP = 2,
-    DOWN = 3,
-};
-
-typedef enum ControlKeys{
+typedef enum ControlKeys {
     SUBMIT_KEY,
     ROTATE_KEY,
 } ControlKeys;
-
-ControlKeys controlKeys;
-
-bool debounce_prev_submit = false;
-bool submit_flag = false;
-bool debounce_prev_rotate = false;
-bool blink_switch;
-int down_counter = 0;
-
 
 // ============================ //
 //          GLOBALS             //
@@ -111,10 +95,19 @@ unsigned char game_grid[8][4];
 GamePiece current_piece;
 unsigned char type = 2;
 
+bool debounce_prev_submit = false;
+bool submit_flag = false;
+bool debounce_prev_rotate = false;
+bool blink_switch;
+int down_counter = 0;
+
+ControlKeys controlKeys;
+
 // ============================ //
 //          FUNCTIONS           //
 // ============================ //
-void timer_init(){
+void timer_init()
+{
     T0CONbits.T08BIT = 0;       // 16-bit mode
     T0CONbits.T0CS = 0;         // Internal instruction cycle clock
     T0CONbits.PSA = 0;          // Prescaler is assigned
@@ -163,7 +156,8 @@ void input_init()
     PORTJ = 0b00111111;
 }
 
-void grid_init() {
+void grid_init()
+{
     for (int i = 0; i < GAME_HEIGHT; i++) {
         for (int j = 0; j < GAME_WIDTH; j++) {
             game_grid[i][j] = 0;
@@ -171,7 +165,8 @@ void grid_init() {
     }
 }
 
-void init(){
+void init()
+{
     blink_switch = false;
     timer_init();
     input_init();
@@ -372,7 +367,7 @@ void move_down()
 
 void rotate()
 {
-    if (current_piece.type != 0)
+    if (current_piece.type != 2)
     {
         return;
     }
