@@ -43,6 +43,13 @@
 // ============================ //
 //        DEFINITIONS           //
 // ============================ //
+#ifndef bool 
+#define bool unsigned char
+#define TRUE 1
+#define FALSE 0
+#endif
+#define ARRAY2WORD(array) (unsigned char) ((array[0] << 0) | (array[1] << 1) | (array[2] << 2) | (array[3] << 3) | (array[4] << 4) | (array[5] << 5) | (array[6] << 6) | (array[7] << 7))
+#define BITOF(var, bit) ((var) & (1 << (bit)))
 
 
 //  IMPLEMENET STATES 
@@ -51,6 +58,46 @@
 // PORTA-2 MOVE THE PIECE DOWN
 // PORTA-3 MOVE THE PIECE LEFT
 // POLL THE PORTA<0-3>
+
+typedef enum LedOnOff{
+    LED_ON,
+    LED_OFF,
+}LedOnOff;
+
+typedef struct GridPosition {
+    unsigned char x;
+    unsigned char y;
+}GridPosition;
+
+GridPosition gridPosition;
+LedOnOff gameGrid[4][8];
+
+typedef enum GameObjects{
+    L_OBJECT,
+    SQUARE_OBJECT,
+    POINT_OBJECT,
+}GameObjects;
+
+GameObjects gameObjects;
+int movementKeysCount = 4;
+
+typedef enum MovementKeys {
+    RIGHT_ARROW_KEY,
+    LEFT_ARROW_KEY,
+    UP_ARROW_KEY,
+    BOTTOM_ARROW_KEY,
+}MovementKeys;
+
+MovementKeys movementKeys;
+
+typedef enum ControlKeys{
+    SUBMIT_KEY,
+    ROTATE_KEY,
+}ControlKeys;
+
+ControlKeys controlKeys;
+
+
 
 // TETRIS BLOCKS WILL BE ROTATED BY THE PORTB-5
 // TETRIS BLOCKS WILL BE SUBMITTED BY THE PORTB-6
@@ -83,6 +130,49 @@
 // ============================ //
 //          FUNCTIONS           //
 // ============================ //
+
+void move_left(){
+    GridPosition alivePosition;
+    // alivePosition.x = gridPosition.x - 1;
+    // alivePosition.y = gridPosition.y;
+    // REFERANCE => UPPER LEFT CORNER OF THE OBJECTS
+    // only point object has the area size of 1x1.
+    // others should be considered as 2x2.
+    alivePosition.x = gridPosition.x - 1;
+    if(gridPosition.x >=1)
+        gridPosition.x = alivePosition.x;
+}
+void move_right(GameObjects object){
+    // REFERANCE => UPPER LEFT CORNER OF THE OBJECTS
+    // BEAWARE OF YOU NEED TO CHECK RIGHT BOUNDS;
+    GridPosition alivePosition;
+    
+    switch (object)
+    {
+        case POINT_OBJECT:
+            if(gridPosition.x <=6)
+            {
+                alivePosition.x = gridPosition.x + 1;
+                gridPosition.x = alivePosition.x;
+            }
+            break;
+        case L_OBJECT:
+            // our referance was the upper left, in order 
+            // to check right bounds we need to check the
+            // right bounds. L_OBJECT and SQUARE_OBJECTS
+            // should checked for the same boundaries.
+            
+        case SQUARE_OBJECT:
+            alivePosition.x = gridPosition.x + 1;
+            alivePosition.x = gridPosition.x;
+            if(alivePosition.x <=6){
+                alivePosition.x = gridPosition.x + 2;
+                gridPosition.x = alivePosition.x;
+            }
+            break;
+    }
+}
+
 
 // You can write function definitions here...
 
