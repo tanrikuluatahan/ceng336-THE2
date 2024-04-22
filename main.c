@@ -50,6 +50,8 @@
 #endif
 #define ARRAY2WORD(array) (unsigned char) ((array[0] << 0) | (array[1] << 1) | (array[2] << 2) | (array[3] << 3) | (array[4] << 4) | (array[5] << 5) | (array[6] << 6) | (array[7] << 7))
 #define BITOF(var, bit) ((var) & (1 << (bit)))
+#define GAME_WIDTH 4
+#define GAME_HEIGHT 8
 
 
 //  IMPLEMENET STATES 
@@ -59,10 +61,6 @@
 // PORTA-3 MOVE THE PIECE LEFT
 // POLL THE PORTA<0-3>
 
-typedef enum LedOnOff{
-    LED_OFF,
-    LED_ON,
-}LedOnOff;
 
 typedef struct GridPosition {
     unsigned char x;
@@ -70,7 +68,7 @@ typedef struct GridPosition {
 }GridPosition;
 
 GridPosition gridPosition;
-LedOnOff gameGrid[4][8];
+unsigned char gameGrid[4][8];
 
 typedef enum GameObjects{
     L_OBJECT,
@@ -109,6 +107,8 @@ L_Rotate l_rotate = 0;
 bool debounce_prev_submit = false;
 bool submit_flag = false;
 bool debounce_prev_rotate = false;
+bool blink_switch;
+int down_counter = 0;
 
 // TETRIS BLOCKS WILL BE ROTATED BY THE PORTB-5
 // TETRIS BLOCKS WILL BE SUBMITTED BY THE PORTB-6
@@ -135,6 +135,39 @@ bool debounce_prev_rotate = false;
 // -7-SEGMENT DISPLAY SHOULD SHOW ZEROES 
 // -SYSTEM SHOULD WAIT ONE SECOND, ENABLE INTERRUPTS 
 // AND START THE GAME LOOP
+
+void timer_init(){
+    T0CONbits.T08BIT = 0; // 16-bit mode
+    T0CONbits.T0CS = 0;  // Internal instruction cycle clock
+    T0CONbits.PSA = 0;   // Prescaler is assigned
+    T0CONbits.T0PS = 0b100; // Prescaler 1:64
+
+    TMR0H = (26474 >> 8); // Set high byte of timer start
+    TMR0L = (26474 & 0xFF); // Set low byte of timer start
+
+    INTCONbits.TMR0IE = 1; // Enable Timer0 interrupt
+    INTCONbits.GIE = 1;    // Enable global interrupt
+    INTCONbits.PEIE = 1;   // Enable peripheral interrupt
+
+    //T0CONbits.TMR0ON = 1;  // Start Timer0
+
+}
+
+void input_init(){
+    TRISA = 0b00001111;
+    TRISB = 0b01100000;
+
+    INTCONTbits.INT0IE = 1;
+    INTCON3bits.INT1IE = 1;
+}
+
+void init(){
+    blink_switch = false;
+    timer_init();
+    TRISA = 0b00001111;
+    TRISB = 0b00100000;
+}
+
 
 // You can write globals definitions here...
 
@@ -319,7 +352,16 @@ bool submit(){
     return submit_flag;
 }
 
-
+void blink(){
+    //8 blink = one object down cycle
+    down_counter++;
+    if(down_counter==8){
+        move_down(gameObjects);
+        down_counter = 0;
+        
+    }
+    blink_switch = !blink_switch;
+}
 
 // You can write function definitions here...
 
@@ -331,6 +373,24 @@ void HandleInterrupt()
 {
     // ISR ...
     
+    if (INTCONbits.TMR0IF){
+        INTCONbits.TMR0IF = 0;
+
+        // ...
+        // ...
+        // not sure about the timer conditions.
+
+        TMR0H = (26474 >> 8); // Reload high byte
+        TMR0L = (26474 & 0xFF); // Reload low byte
+        blink();
+
+    }
+
+
+
+    // PORTB INTERRUPTS
+    // RB5 for rotation
+    // RB6 for submit
     if (INTCONbits.RBIF){
         INTCONbits.RBIF = 0;
 
