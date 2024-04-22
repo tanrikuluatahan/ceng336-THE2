@@ -39,55 +39,106 @@
 // ============================ //
 
 #include <xc.h>
+#include <stdlib.h>
 
 // ============================ //
 //        DEFINITIONS           //
 // ============================ //
-#define GAME_WIDTH  4
+#ifndef bool 
+#define bool unsigned char
+#define true 1
+#define false 0
+#endif
+#define ARRAY2WORD(array) (unsigned char) ((array[0] << 0) | (array[1] << 1) | (array[2] << 2) | (array[3] << 3) | (array[4] << 4) | (array[5] << 5) | (array[6] << 6) | (array[7] << 7))
+#define BITOF(var, bit) ((var) & (1 << (bit)))
+
+#define GAME_WIDTH 4
 #define GAME_HEIGHT 8
 
-enum KEY {
-    R   = 0,            // PORTA0 - poll
-    U   = 1,            // PORTA1 - poll
-    D   = 2,            // PORTA2 - poll
-    L   = 3,            // PORTA3 - poll
-    ROT = 5,            // PORTB5 - interrupt triggered
-    SUB = 6,            // PORTB6 - interrupt triggered
-};
+typedef struct GridPosition {
+    unsigned char x;
+    unsigned char y;
+} GridPosition;
+
+typedef enum GameObjects {
+    L_OBJECT,
+    SQUARE_OBJECT,
+    POINT_OBJECT,
+} GameObjects;
 
 typedef enum PIECE {
-    DOT,                  // dot piece
-    SQU,                  // square piece
-    LPI                   // L piece
+    L =         2,
+    SQUARE =    1,
+    POINT =     0,
 } PIECE;
 
 typedef struct {
     unsigned char x;
     unsigned char y;
+    unsigned char shape[2][2];
     unsigned char rotation;
     PIECE type;
-} TetrisPiece;
+} GamePiece;
+
+GameObjects gameObjects;
+int movementKeysCount = 4;
+
+enum MovementKeys {
+    RIGHT = 0,
+    LEFT = 1,
+    UP = 2,
+    DOWN = 3,
+};
+
+typedef enum ControlKeys{
+    SUBMIT_KEY,
+    ROTATE_KEY,
+} ControlKeys;
+
+ControlKeys controlKeys;
+
+bool debounce_prev_submit = false;
+bool submit_flag = false;
+bool debounce_prev_rotate = false;
+bool blink_switch;
+int down_counter = 0;
+
 
 // ============================ //
 //          GLOBALS             //
 // ============================ //
-unsigned char game_grid[4][8];
-volatile unsigned char timer_counter = 0;
-TetrisPiece current_piece;
+unsigned char game_grid[8][4];
+GamePiece current_piece;
+unsigned char type = 2;
 
 // ============================ //
 //          FUNCTIONS           //
 // ============================ //
+void timer_init(){
+    T0CONbits.T08BIT = 0;       // 16-bit mode
+    T0CONbits.T0CS = 0;         // Internal instruction cycle clock
+    T0CONbits.PSA = 0;          // Prescaler is assigned
+    T0CONbits.T0PS = 0b100;     // Prescaler 1:64
 
-void init(void)
+    TMR0H = (26474 >> 8);       // Set high byte of timer start
+    TMR0L = (26474 & 0xFF);     // Set low byte of timer start
+
+    INTCONbits.TMR0IE = 1;      // Enable Timer0 interrupt
+    INTCONbits.GIE = 1;         // Enable global interrupt
+    INTCONbits.PEIE = 1;        // Enable peripheral interrupt
+
+    //T0CONbits.TMR0ON = 1;  // Start Timer0
+}
+
+void input_init()
 {
-    // Initialize PORTA and PORTB
     TRISA = 0b00001111;
-    TRISB = 0b00100000;
-    
-    INTCONbits.INT0IE = 1; // PORT5 interrupt enable
-    INTCON3bits.INT1IE = 1; // PORT6 interrupt enable
-    
+    TRISB = 0b01100000;
+    TRISG = 0b00011101;
+
+    INTCONbits.INT0IE = 1;
+    INTCON3bits.INT1IE = 1;
+
     // Initialize PORTC-F
     TRISC = 0b00000000;
     TRISD = 0b00000000;
@@ -97,104 +148,267 @@ void init(void)
     TRISJ = 0b00000000;
     
     // Clear all LEDs
+    PORTA = 0;
+    PORTB = 0;
     PORTC = 0;
     PORTD = 0;
     PORTE = 0;
     PORTF = 0;
     PORTH = 0;
     PORTJ = 0;
-    
-    // Display zeros
-    PORTH = 0b00001111;
-    PORTJ = 0b00011111;
+    PORTG = 0;
 
-    // Initialize TIMER0
-    T0CON = 0b10000001;
-    TMR0IE = 1;
-    TMR0IF = 0;
+    // Display zeros
+    PORTH = 0b00111111;
+    PORTJ = 0b00111111;
 }
 
-void init_game(void)
-{
-    // Initialize game region
-    for (int i = 0; i < 8; i++) {
-        for (int j = 0; j < 4; j++) {
+void grid_init() {
+    for (int i = 0; i < GAME_HEIGHT; i++) {
+        for (int j = 0; j < GAME_WIDTH; j++) {
             game_grid[i][j] = 0;
         }
     }
 }
 
-void spawn(void)
-{
-    current_piece.x = GAME_WIDTH / 2;
-    current_piece.y = 0;
-    current_piece.rotation = 0; // Initial rotation
-    // Choose a random piece type (DOT, SQU, LPI)
-    current_piece.type = rand() % 3;
+void init(){
+    blink_switch = false;
+    timer_init();
+    input_init();
+    grid_init();
 }
 
-void display(void)
+void display()
 {
+    // Display game region on LEDs
     for (int i = 0; i < GAME_HEIGHT; i++) {
         PORTC = game_grid[i][0];
         PORTD = game_grid[i][1];
+        PORTE = game_grid[i][2];
+        PORTF = game_grid[i][3];
     }
 }
 
-void move_left(void)
+void draw_piece(GamePiece piece)
 {
-    return;
-}
-
-void move_right(void)
-{
-    return;
-}
-
-void move_up(void)
-{
-    return;
-}
-
-void move_down(void)
-{
-    return;
-}
-
-void one_second_delay(void)
-{
-    while (timer_counter < 250)
-    {
-        unsigned char a = 0;
+    for (int i = 0; i < 2; i++) {
+        for (int j = 0; j < 2; j++) {
+            game_grid[piece.y + j][piece.x + i] = current_piece.shape[i][j];
+        }
     }
-    timer_counter = 0;
-}
-
-void poll_portA(void)
-{
-    //
-}
-
-void game(void)
-{
-    // point
     
+    unsigned char port_c = 0;
+    unsigned char port_d = 0;
+    unsigned char port_e = 0;
+    unsigned char port_f = 0;
+    
+    for (int i = 0; i < 8; i++) {
+        port_c |= game_grid[i][0] << i;
+        port_d |= game_grid[i][1] << i;
+        port_e |= game_grid[i][2] << i;
+        port_f |= game_grid[i][3] << i;
+    }
+    
+    PORTC = port_c;
+    PORTD = port_d;
+    PORTE = port_e;
+    PORTF = port_f;
 }
 
-void submit(void)
+void spawn() 
 {
-    unsigned int delay_counter = 0;
-    while (delay_counter < 62)
-    {
-        while (!TMR0IF);
-        TMR0IF = 0;
-        delay_counter++;
+    current_piece.x = 1;
+    current_piece.y = 0;
+    current_piece.rotation = 1;
+    current_piece.type = type;
+    
+    type = (type + 1) % 3;
+    
+    switch (current_piece.type) {
+        case 0:
+            current_piece.shape[0][0] = 1;
+            current_piece.shape[0][1] = 0;
+            current_piece.shape[1][0] = 0;
+            current_piece.shape[1][1] = 0;
+            break;
+        case 1:
+            current_piece.shape[0][0] = 1;
+            current_piece.shape[0][1] = 1;
+            current_piece.shape[1][0] = 1;
+            current_piece.shape[1][1] = 1;
+            break;
+        case 2:
+            current_piece.shape[0][0] = current_piece.rotation % 4 == 0 ? 0 : 1;
+            current_piece.shape[0][1] = current_piece.rotation % 4 == 1 ? 0 : 1;
+            current_piece.shape[1][0] = current_piece.rotation % 4 == 2 ? 0 : 1;
+            current_piece.shape[1][1] = current_piece.rotation % 4 == 3 ? 0 : 1;
+            break;
     }
 }
 
-void rotate(void)
+void spawn_pos(unsigned char x, unsigned char y) 
 {
-   // rotate
+    current_piece.x = x;
+    current_piece.y = y;
+    
+    switch (current_piece.type) {
+        case 0:
+            current_piece.shape[0][0] = 1;
+            current_piece.shape[0][1] = 0;
+            current_piece.shape[1][0] = 0;
+            current_piece.shape[1][1] = 0;
+            break;
+        case 1:
+            current_piece.shape[0][0] = 1;
+            current_piece.shape[0][1] = 1;
+            current_piece.shape[1][0] = 1;
+            current_piece.shape[1][1] = 1;
+            break;
+        case 2:
+            current_piece.shape[0][0] = current_piece.rotation % 4 == 0 ? 0 : 1;
+            current_piece.shape[0][1] = current_piece.rotation % 4 == 1 ? 0 : 1;
+            current_piece.shape[1][0] = current_piece.rotation % 4 == 2 ? 0 : 1;
+            current_piece.shape[1][1] = current_piece.rotation % 4 == 3 ? 0 : 1;
+            break;
+    }
+}
+
+void update_game()
+{   
+    for (int i = 0; i < 2; i++) {
+        game_grid[current_piece.y][current_piece.x + i] = 0;
+    }
+    
+    for (int i = 0; i < 2; i++) {
+        game_grid[current_piece.y + i][current_piece.x] = 0;
+    }
+    
+    current_piece.y++;
+    
+    spawn_pos(current_piece.x, current_piece.y);
+}
+
+void move_left()
+{    
+    for (int i = 0; i < 2; i++) {
+        game_grid[current_piece.y + i][current_piece.x] = 0;
+    }
+    
+    for (int i = 0; i < 2; i++) {
+        game_grid[current_piece.y][current_piece.x + i] = 0;
+    }
+    
+    switch (current_piece.type)
+    {
+        case 0:
+            if (current_piece.x >= 1) { current_piece.x--; }
+            break;
+        case 2:
+            if (current_piece.x >= 1) { current_piece.x--; }
+            break;
+        case 1:
+            if (current_piece.x >= 1) { current_piece.x--; }
+            break;
+    }
+    
+    spawn_pos(current_piece.x, current_piece.y);
+}
+
+void move_right()
+{    
+    for (int i = 0; i < 2; i++) {
+        game_grid[current_piece.y + i][current_piece.x] = 0;
+    }
+    
+    for (int i = 0; i < 2; i++) {
+        game_grid[current_piece.y][current_piece.x + i] = 0;
+    }
+    
+    switch (current_piece.type)
+    {
+        case 0:
+            if (current_piece.x <= 2) { current_piece.x++; }
+            break;
+        case 2:
+            if (current_piece.x <= 1) { current_piece.x++; }
+            break;
+        case 1:
+            if (current_piece.x <= 1) { current_piece.x++; }
+            break;
+    }
+    
+    spawn_pos(current_piece.x, current_piece.y);
+}
+
+void move_up()
+{
+    for (int i = 0; i < 2; i++) {
+        game_grid[current_piece.y][current_piece.x + i] = 0;
+    }
+    
+    for (int i = 0; i < 2; i++) {
+        game_grid[current_piece.y + i][current_piece.x] = 0;
+    }
+    
+    current_piece.y = current_piece.y - 1;
+    
+    spawn_pos(current_piece.x, current_piece.y);
+}
+
+void move_down()
+{
+    for (int i = 0; i < 2; i++) {
+        game_grid[current_piece.y][current_piece.x + i] = 0;
+    }
+    
+    for (int i = 0; i < 2; i++) {
+        game_grid[current_piece.y + i][current_piece.x] = 0;
+    }
+    
+    current_piece.y = current_piece.y + 1;
+    
+    spawn_pos(current_piece.x, current_piece.y);
+}
+
+void rotate()
+{
+    if (current_piece.type != 0)
+    {
+        return;
+    }
+    
+    current_piece.rotation++;
+    
+    if (current_piece.rotation >= 4)
+    {
+        current_piece.rotation = 1;
+    }
+    
+    spawn_pos(current_piece.x, current_piece.y);
+}
+
+void poll_portG()
+{
+    if (PORTGbits.RG0)
+    {
+        move_right();
+        while (PORTGbits.RG0);
+    }
+    if (PORTGbits.RG2)
+    {
+        move_up();
+        while (PORTGbits.RG2);
+    }
+    if (PORTGbits.RG3)
+    {
+        move_down();
+        while (PORTGbits.RG3);
+    }
+    if (PORTGbits.RG4)
+    {
+        move_left();
+        while (PORTGbits.RG4);
+    }
 }
 
 // ============================ //
@@ -203,25 +417,30 @@ void rotate(void)
 __interrupt(high_priority)
 void HandleInterrupt()
 {
-    if (TMR0IF)
-    {
-        timer_counter++;
-        TMR0 = 100;
-        TMR0IF = 0;
-    }
+    // ISR ...
     
-    // B5
-    if (INTCONbits.INT0IF && PORTBbits.RB5 == 0)
-    {
-        submit();
-        INTCONbits.INT0IF = 0; // clear flag
+    if (INTCONbits.TMR0IF){
+        INTCONbits.TMR0IF = 0;
+
+        // ...
+        // ...
+        // not sure about the timer conditions.
+
+        TMR0H = (26474 >> 8); // Reload high byte
+        TMR0L = (26474 & 0xFF); // Reload low byte
+        //blink();
     }
-    
-    // B6
-    if (INTCON3bits.INT1IF && PORTBbits.RB6 == 0)
-    {
-        submit();
-        INTCON3bits.INT1IF = 0; // clear flag
+
+    if (INTCONbits.RBIF){
+        INTCONbits.RBIF = 0;
+
+        if(PORTBbits.RB5){
+            rotate();
+        }
+        debounce_prev_rotate = PORTBbits.RB5;
+        if(PORTBbits.RB6){
+            update_game();
+        }
     }
 }
 
@@ -230,34 +449,13 @@ void HandleInterrupt()
 // ============================ //
 void main()
 {
-    // Initialize
     init();
-    PORTA = 0b11111111;
-    one_second_delay();
-    PORTA = 0;
+    T0CONbits.TMR0ON = 1;
     
-    // Enable interrupts
-    GIE = 1;
-    
-    while (1)
+    spawn();
+    while(1)
     {
-        // Poll PORTA inputs
-        if (PORTAbits.RA0)
-        {
-            move_right();
-        }
-        if (PORTAbits.RA1)
-        {
-            move_up();
-        }
-        if (PORTAbits.RA2)
-        {
-            move_down();
-        }
-        if (PORTAbits.RA3)
-        {
-            move_left();
-        }
+        poll_portG();
+        draw_piece(current_piece);
     }
-    
 }
