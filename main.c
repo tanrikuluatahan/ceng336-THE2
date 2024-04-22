@@ -43,48 +43,159 @@
 // ============================ //
 //        DEFINITIONS           //
 // ============================ //
+#define GAME_WIDTH  4
+#define GAME_HEIGHT 8
 
+enum KEY {
+    R   = 0,            // PORTA0 - poll
+    U   = 1,            // PORTA1 - poll
+    D   = 2,            // PORTA2 - poll
+    L   = 3,            // PORTA3 - poll
+    ROT = 5,            // PORTB5 - interrupt triggered
+    SUB = 6,            // PORTB6 - interrupt triggered
+};
 
-//  IMPLEMENET STATES 
-// PORTA-0 MOVE THE PIECE RIGHT
-// PORTA-1 MOVE THE PIECE UP
-// PORTA-2 MOVE THE PIECE DOWN
-// PORTA-3 MOVE THE PIECE LEFT
-// POLL THE PORTA<0-3>
+typedef enum PIECE {
+    DOT,                  // dot piece
+    SQU,                  // square piece
+    LPI                   // L piece
+} PIECE;
 
-// TETRIS BLOCKS WILL BE ROTATED BY THE PORTB-5
-// TETRIS BLOCKS WILL BE SUBMITTED BY THE PORTB-6
-// THOSE PORTB<5-6> WILL BE TRIGGERED BY INTERRUPTS
-
-// TIMER0 INTERRUPT WILL BE USED TO BLINK THE "CURRENT"
-// TETRIS PIECE
-//
-// ALSO THIS TETRIS PIECE SHOULD GO DOWN GRADUALLY BY
-// THIS TIMER0 ALSO, THIS MOVEMENT SHOULD ALSO IN ADDITION
-// TO THE USER INPUTS
-
-
-// You can write struct definitions here...
+typedef struct {
+    unsigned char x;
+    unsigned char y;
+    unsigned char rotation;
+    PIECE type;
+} TetrisPiece;
 
 // ============================ //
 //          GLOBALS             //
 // ============================ //
-
-// INIT 
-// -CLEAR THE PINS
-// -INTERRUPTS AND I/O RELATED CHIP STATES
-// SHOULD BE SET.
-// -7-SEGMENT DISPLAY SHOULD SHOW ZEROES 
-// -SYSTEM SHOULD WAIT ONE SECOND, ENABLE INTERRUPTS 
-// AND START THE GAME LOOP
-
-// You can write globals definitions here...
+unsigned char game_grid[4][8];
+volatile unsigned char timer_counter = 0;
+TetrisPiece current_piece;
 
 // ============================ //
 //          FUNCTIONS           //
 // ============================ //
 
-// You can write function definitions here...
+void init(void)
+{
+    // Initialize PORTA and PORTB
+    TRISA = 0b00001111;
+    TRISB = 0b00100000;
+    
+    INTCONbits.INT0IE = 1; // PORT5 interrupt enable
+    INTCON3bits.INT1IE = 1; // PORT6 interrupt enable
+    
+    // Initialize PORTC-F
+    TRISC = 0b00000000;
+    TRISD = 0b00000000;
+    TRISE = 0b00000000;
+    TRISF = 0b00000000;
+    TRISH = 0b00000000;
+    TRISJ = 0b00000000;
+    
+    // Clear all LEDs
+    PORTC = 0;
+    PORTD = 0;
+    PORTE = 0;
+    PORTF = 0;
+    PORTH = 0;
+    PORTJ = 0;
+    
+    // Display zeros
+    PORTH = 0b00001111;
+    PORTJ = 0b00011111;
+
+    // Initialize TIMER0
+    T0CON = 0b10000001;
+    TMR0IE = 1;
+    TMR0IF = 0;
+}
+
+void init_game(void)
+{
+    // Initialize game region
+    for (int i = 0; i < 8; i++) {
+        for (int j = 0; j < 4; j++) {
+            game_grid[i][j] = 0;
+        }
+    }
+}
+
+void spawn(void)
+{
+    current_piece.x = GAME_WIDTH / 2;
+    current_piece.y = 0;
+    current_piece.rotation = 0; // Initial rotation
+    // Choose a random piece type (DOT, SQU, LPI)
+    current_piece.type = rand() % 3;
+}
+
+void display(void)
+{
+    for (int i = 0; i < GAME_HEIGHT; i++) {
+        PORTC = game_grid[i][0];
+        PORTD = game_grid[i][1];
+    }
+}
+
+void move_left(void)
+{
+    return;
+}
+
+void move_right(void)
+{
+    return;
+}
+
+void move_up(void)
+{
+    return;
+}
+
+void move_down(void)
+{
+    return;
+}
+
+void one_second_delay(void)
+{
+    while (timer_counter < 250)
+    {
+        unsigned char a = 0;
+    }
+    timer_counter = 0;
+}
+
+void poll_portA(void)
+{
+    //
+}
+
+void game(void)
+{
+    // point
+    
+}
+
+void submit(void)
+{
+    unsigned int delay_counter = 0;
+    while (delay_counter < 62)
+    {
+        while (!TMR0IF);
+        TMR0IF = 0;
+        delay_counter++;
+    }
+}
+
+void rotate(void)
+{
+   // rotate
+}
 
 // ============================ //
 //   INTERRUPT SERVICE ROUTINE  //
@@ -92,7 +203,26 @@
 __interrupt(high_priority)
 void HandleInterrupt()
 {
-    // ISR ...
+    if (TMR0IF)
+    {
+        timer_counter++;
+        TMR0 = 100;
+        TMR0IF = 0;
+    }
+    
+    // B5
+    if (INTCONbits.INT0IF && PORTBbits.RB5 == 0)
+    {
+        submit();
+        INTCONbits.INT0IF = 0; // clear flag
+    }
+    
+    // B6
+    if (INTCON3bits.INT1IF && PORTBbits.RB6 == 0)
+    {
+        submit();
+        INTCON3bits.INT1IF = 0; // clear flag
+    }
 }
 
 // ============================ //
@@ -100,5 +230,34 @@ void HandleInterrupt()
 // ============================ //
 void main()
 {
-    // Main ...
+    // Initialize
+    init();
+    PORTA = 0b11111111;
+    one_second_delay();
+    PORTA = 0;
+    
+    // Enable interrupts
+    GIE = 1;
+    
+    while (1)
+    {
+        // Poll PORTA inputs
+        if (PORTAbits.RA0)
+        {
+            move_right();
+        }
+        if (PORTAbits.RA1)
+        {
+            move_up();
+        }
+        if (PORTAbits.RA2)
+        {
+            move_down();
+        }
+        if (PORTAbits.RA3)
+        {
+            move_left();
+        }
+    }
+    
 }
