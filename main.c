@@ -159,13 +159,32 @@ void input_init(){
 
     INTCONTbits.INT0IE = 1;
     INTCON3bits.INT1IE = 1;
+
+    // Initialize PORTC-F
+    TRISC = 0b00000000;
+    TRISD = 0b00000000;
+    TRISE = 0b00000000;
+    TRISF = 0b00000000;
+    TRISH = 0b00000000;
+    TRISJ = 0b00000000;
+    
+    // Clear all LEDs
+    PORTC = 0;
+    PORTD = 0;
+    PORTE = 0;
+    PORTF = 0;
+    PORTH = 0;
+    PORTJ = 0;
+
+    // Display zeros
+    PORTH = 0b00001111;
+    PORTJ = 0b00111111;
 }
 
 void init(){
     blink_switch = false;
     timer_init();
-    TRISA = 0b00001111;
-    TRISB = 0b00100000;
+    input_init();
 }
 
 
@@ -423,4 +442,9 @@ void HandleInterrupt()
 void main()
 {
     // Main ...
+    init();
+    T0CONbits.TMR0ON = 1;
+    while(1){
+        // game logic 
+    }
 }
