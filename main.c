@@ -97,12 +97,14 @@ typedef enum ControlKeys {
 unsigned char game_grid[8][4];
 unsigned char piece_grid[8][4];
 GamePiece current_piece;
-unsigned char type = 2;
+unsigned char type = 0;
 
 bool debounce_prev_submit = false;
 bool submit_flag = false;
 bool debounce_prev_rotate = false;
 bool blink;
+unsigned int init_counter;
+unsigned int drop_down_counter;
 unsigned int score_counter;
 unsigned int prev_score;
 
@@ -195,7 +197,7 @@ void timer_init()
     T0CONbits.T08BIT = 0;       // 16-bit mode
     T0CONbits.T0CS = 0;         // Internal instruction cycle clock
     T0CONbits.PSA = 0;          // Prescaler is assigned
-    T0CONbits.T0PS = 0b100;     // Prescaler 1:64
+    T0CONbits.T0PS = 0b101;     // Prescaler 1:16
 
     TMR0H = (26474 >> 8);       // Set high byte of timer start
     TMR0L = (26474 & 0xFF);     // Set low byte of timer start
@@ -203,7 +205,7 @@ void timer_init()
     INTCONbits.TMR0IE = 1;      // Enable Timer0 interrupt
     INTCONbits.GIE = 1;         // Enable global interrupt
     INTCONbits.PEIE = 1;        // Enable peripheral interrupt
-
+    drop_down_counter = 0;
     //T0CONbits.TMR0ON = 1;  // Start Timer0
 }
 
@@ -345,9 +347,9 @@ void spawn()
             
             break;
         case 2:
-            current_piece.shape[0][0] = current_piece.rotation % 4 == 0 ? 0 : 1;
-            current_piece.shape[0][1] = current_piece.rotation % 4 == 1 ? 0 : 1;
-            current_piece.shape[1][0] = current_piece.rotation % 4 == 2 ? 0 : 1;
+            current_piece.shape[0][0] = current_piece.rotation % 4 == 1 ? 0 : 1;
+            current_piece.shape[0][1] = current_piece.rotation % 4 == 2 ? 0 : 1;
+            current_piece.shape[1][0] = current_piece.rotation % 4 == 0 ? 0 : 1;
             current_piece.shape[1][1] = current_piece.rotation % 4 == 3 ? 0 : 1;
             break;
     }
@@ -372,10 +374,18 @@ void spawn_pos(unsigned char x, unsigned char y)
             current_piece.shape[1][1] = 1;
             break;
         case 2:
-            current_piece.shape[0][0] = current_piece.rotation % 4 == 0 ? 0 : 1;
-            current_piece.shape[0][1] = current_piece.rotation % 4 == 1 ? 0 : 1;
-            current_piece.shape[1][0] = current_piece.rotation % 4 == 2 ? 0 : 1;
+            current_piece.shape[0][0] = current_piece.rotation % 4 == 1 ? 0 : 1;
+            // x o
+            // o o
+            current_piece.shape[0][1] = current_piece.rotation % 4 == 2 ? 0 : 1;
+            // o x
+            // o o
+            current_piece.shape[1][0] = current_piece.rotation % 4 == 0 ? 0 : 1;
+            // o o
+            // x o
             current_piece.shape[1][1] = current_piece.rotation % 4 == 3 ? 0 : 1;
+            // o o
+            // o x
             break;
     }
 }
@@ -409,7 +419,7 @@ void update_game()
 //                current_piece.shape[0][1] = current_piece.rotation % 4 == 1 ? 0 : 1;
 //                current_piece.shape[1][0] = current_piece.rotation % 4 == 2 ? 0 : 1;
 //                current_piece.shape[1][1] = current_piece.rotation % 4 == 3 ? 0 : 1;
-                case 0:
+                case 1:
                     if(!game_grid[current_piece.y+1][current_piece.x]&&!game_grid[current_piece.y+1][current_piece.x+1]&&!game_grid[current_piece.y][current_piece.x+1]){
                         //game_grid[current_piece.y][current_piece.x] = piece_grid[current_piece.y][current_piece.x];
                         game_grid[current_piece.y+1][current_piece.x] = piece_grid[current_piece.y+1][current_piece.x];
@@ -418,7 +428,7 @@ void update_game()
                         control_flag = 1;
                         }   
                     break;
-                case 1:
+                case 2:
                     //                current_piece.shape[0][1] = current_piece.rotation % 4 == 1 ? 0 : 1;
 
                     if(!game_grid[current_piece.y+1][current_piece.x]&&!game_grid[current_piece.y][current_piece.x]&&!game_grid[current_piece.y+1][current_piece.x+1]){
@@ -429,7 +439,7 @@ void update_game()
                         control_flag = 1;
                     }
                     break;
-                case 2:
+                case 0:
                     //                current_piece.shape[1][0] = current_piece.rotation % 4 == 2 ? 0 : 1;
 
                     if(!game_grid[current_piece.y][current_piece.x]&&!game_grid[current_piece.y][current_piece.x+1]&&!game_grid[current_piece.y+1][current_piece.x+1]){
@@ -466,8 +476,8 @@ void update_game()
     if(control_flag){
         
         score_counter++;
-        current_piece.type = 0;
-        //current_piece.type = (current_piece.type + 1) % 3;
+        //current_piece.type = 2;
+        current_piece.type = (current_piece.type + 1) % 3;
         current_piece.y=0;
         current_piece.x=0;
         spawn_pos(current_piece.x, current_piece.y);
@@ -628,6 +638,13 @@ void HandleInterrupt()
         TMR0H = (26474 >> 8); // Reload high byte
         TMR0L = (26474 & 0xFF); // Reload low byte
         blink=!blink;
+        if(init_counter<4)
+            init_counter++;
+        drop_down_counter++;
+        if(drop_down_counter==8){
+            move_down();
+            drop_down_counter=0;
+        }
         //blink();
     }
 
@@ -653,9 +670,10 @@ void HandleInterrupt()
 // ============================ //
 void main()
 {
+    
     init();
     T0CONbits.TMR0ON = 1;
-    
+    while(init_counter < 4);
     spawn();
     while(1)
     {
